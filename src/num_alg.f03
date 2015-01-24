@@ -141,4 +141,27 @@ CONTAINS
 		END IF
 	END FUNCTION
 
+	SUBROUTINE H_solve(H, S)
+		DOUBLE PRECISION :: H(:,:), S(:,:)
+		DOUBLE PRECISION, ALLOCATABLE :: WORK(:), e_val(:)
+	    INTEGER :: LWORK = -1, INFO = 0, i = 0
+	
+		ALLOCATE(WORK(1), e_val(SIZE(H,1)))
+
+		CALL DSYGV(1, 'V', 'L', SIZE(H,1), H, SIZE(H,1), S, SIZE(S,1), e_val,&
+					WORK, LWORK, INFO)
+		CALL check_lapack(INFO)
+
+		LWORK = WORK(1)
+		DEALLOCATE(WORK)
+		ALLOCATE(WORK(LWORK))
+
+		CALL DSYGV(1, 'V', 'L', SIZE(H,1), H, SIZE(H,1), S, SIZE(S,1), e_val,&
+					WORK, LWORK, INFO)
+		CALL check_lapack(INFO)	
+
+		WRITE (*,*) (e_val(i), i=1, SIZE(e_val))
+
+	END SUBROUTINE
+
 END MODULE num_alg

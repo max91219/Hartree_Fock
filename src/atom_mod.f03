@@ -1,4 +1,5 @@
 MODULE atom_mod
+
 	IMPLICIT NONE
 	
 	DOUBLE PRECISION, PRIVATE, PARAMETER :: PI = 4.0D0 * ATAN(1.0D0) ! Pi parameter
@@ -20,7 +21,9 @@ MODULE atom_mod
 		CONTAINS
 		
 		PROCEDURE :: overlap
-	
+		PROCEDURE :: ke_int	
+		PROCEDURE :: nuc_int
+
 	END TYPE atom
 
 	CONTAINS
@@ -40,7 +43,7 @@ MODULE atom_mod
 			DOUBLE PRECISION :: diff(3)
 			
 			pre_fac = (PI/(this%alpha + atm_2%alpha))**(3.0D0/2.0D0)
-			norm = pre_fac**(-1.0D0)
+			norm = 1.0D0  !norm = pre_fac**(-1.0D0)
 			exp_fac = ((-1.0D0 * this%alpha * atm_2%alpha) / &
 						(this%alpha + atm_2%alpha))
 			
@@ -50,5 +53,24 @@ MODULE atom_mod
 			
 			IF (overlap .lt. thresh) overlap = 0.0D0
 		END FUNCTION
+
+
+
+
+		FUNCTION ke_int (this, atm_2)
+			class(atom) :: this, atm_2
+			DOUBLE PRECISION :: ke_int 
+
+			ke_int = (3 * this%alpha * atm_2%alpha) / (this%alpha + atm_2%alpha)**(5.0D0/2.0D0) * PI**(3.0D0/2.0D0)
+
+		END FUNCTION ke_int
+
+		FUNCTION nuc_int (this, atm_2)
+			class(atom) :: this, atm_2
+			DOUBLE PRECISION :: nuc_int
+
+			nuc_int = (-2.0D0 * PI * 1.0D0) / (this%alpha + atm_2%alpha)
+		END FUNCTION nuc_int
+			
 
 END MODULE atom_mod

@@ -11,6 +11,7 @@ CHARACTER (len=300) :: file_name = '' ! holder for file name from CMD line arg
 CHARACTER (len=100) :: out_file
 TYPE(atom), ALLOCATABLE :: atoms(:) ! array to hold atoms of the system
 DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), m_gs(:,:), m_sl(:,:) ! matracies for overlap etc.
+DOUBLE PRECISION, ALLOCATABLE :: ke(:,:), nuc(:,:), H(:,:) 
 INTEGER :: N = 0, i = 0, j = 0, k=0, l=0 ! N number of atoms, i,j counters
 DOUBLE PRECISION :: thresh =0.0D0 ! threshold value
 
@@ -27,7 +28,7 @@ END IF
 
 CALL read_input_file(TRIM(file_name), atoms, thresh) ! reads input file (see utils module)
 N = SIZE(atoms) ! sets number of atoms
-ALLOCATE(ovlp(N,N), m_gs(N,N), m_sl(N,N)) ! allocates matracies
+ALLOCATE(ovlp(N,N), m_gs(N,N), m_sl(N,N), ke(N,N), nuc(N,N), H(N,N)) ! allocates matracies
 
 !--------------------------------------------------!
 !---Calculates the overlap matrix of the system ---!
@@ -38,6 +39,12 @@ DO i=1,N
 	DO j=i,N
 		ovlp(j,i) = atoms(i)%overlap(atoms(j), thresh)
 		ovlp(i,j) = ovlp(j,i)
+
+		ke(j,i) = atoms(i)%ke_int(atoms(j))
+		!ke(i,j) = ke(j,i)
+
+		nuc(j,i) = atoms(i)%nuc_int(atoms(j))
+		!nuc(i,j) = nuc(j,i)
 	END DO
 END DO
 
@@ -55,9 +62,9 @@ m_sl = ovlp
 !---transformation matrix 						---!
 !--------------------------------------------------!
 
-CALL gram_schmidt(m_gs)
-CALL write_arr_file(m_gs,'m_gs')
-CALL write_arr_file(check_orthog(m_gs, ovlp, 'G'),'gs_check')
+!CALL gram_schmidt(m_gs)
+!CALL write_arr_file(m_gs,'m_gs')
+!CALL write_arr_file(check_orthog(m_gs, ovlp, 'G'),'gs_check')
 
 !--------------------------------------------------!
 !---Performs symetric lowdin orthogonalisation  ---!
@@ -68,5 +75,20 @@ CALL write_arr_file(check_orthog(m_gs, ovlp, 'G'),'gs_check')
 CALL sym_lowdin(m_sl)
 CALL write_arr_file(m_sl,'m_sl')
 CALL write_arr_file(check_orthog(m_sl, ovlp, 'S'),'sl_check')
+
+
+!CALL write_arr_console(ke)
+!WRITE (*,*) (NEW_LINE('A'), i=1,4)
+!CALL write_arr_console(nuc)
+
+H = ke + nuc
+!WRITE (*,*) (NEW_LINE('A'), i=1,4)
+!CALL write_arr_console(H)
+
+CALL H_solve(H, ovlp)
+
+WRITE (*,*) (NEW_LINE('A'), i=1,4)
+CALL write_arr_console(H)
+
 
 END PROGRAM main
