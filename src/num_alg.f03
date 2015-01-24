@@ -4,13 +4,6 @@ IMPLICIT NONE
 
 CONTAINS
 	
-    !####################################################################
-    !	SUBROUTINE: gram_schmidt										!
-    !	Arguments:														!
-    !		mtx - input matrix of overlaps								!
-    !	Method:															!
-    !		See report for method of gram schmidth orthogonalisation	!
-    !####################################################################
     SUBROUTINE gram_schmidt(mtx)
 		DOUBLE PRECISION ::  mtx(:,:)
 		INTEGER :: INFO = 0, i = 0, j = 0
@@ -27,14 +20,7 @@ CONTAINS
 		CALL DTRTRI('L','N', SIZE(mtx,1), mtx, SIZE(mtx,1), INFO)
 		CALL check_lapack(info)
 	END SUBROUTINE gram_schmidt
-
-    !####################################################################
-    !	SUBROUTINE: sym_lowdin											!
-    !	Arguments:														!
-    !		mtx - input matrix of overlaps								!
-    !	Method:															!
-    !		See report for method of symetrix lowdin orthogonalisation	!
-    !####################################################################
+    
 	SUBROUTINE sym_lowdin(mtx)
 		DOUBLE PRECISION ::  mtx(:,:)
 		DOUBLE PRECISION, ALLOCATABLE :: WORK(:), e_val(:), e_vec_ct(:,:)
@@ -63,16 +49,6 @@ CONTAINS
 		mtx = MATMUL(mtx, e_vec_ct)
 	END SUBROUTINE sym_lowdin		
 
-    !####################################################################
-    !	FUNCTION: calc_sparse											!
-    !	Arguments:														!
-    !		mtx - input matrix for sparsity calculation					!
-    !	Method:															!
-    !		loops over all elements of matrix and keeps running			!
-    !		total of how many are zero. returns the number				!
-    !		of zero elements devided by the total number of				!
-    !		elements													!
-    !####################################################################
 	FUNCTION calc_sparse(mtx)
 		DOUBLE PRECISION :: mtx(:,:)
 		INTEGER :: i = 0, j = 0, k = 0
@@ -88,18 +64,6 @@ CONTAINS
 		k = 0
 	END FUNCTION calc_sparse
 
-    !####################################################################
-    !	SUBROUTINE: check_lapack										!
-    !	Arguments:														!
-    !		info - return value of lapack call to check					!
-    !	Method:															!
-    !		checks the value of info against known lapack error			!
-    !		values to make sure that the call finished approperately	!
-    !		if an error occured then it deals with it approprately		!
-	!				info > 0 - failed to converge						!
-	!				info < 0 - Illegal input							!
-	!				info = 0 - call executed fine						!
-    !####################################################################
     SUBROUTINE check_lapack(info)
 		INTEGER :: info
 		IF (info .eq. 0) THEN
@@ -113,19 +77,6 @@ CONTAINS
 		END IF
 	END SUBROUTINE check_lapack	
 
-    !####################################################################
-    !	FUNCTION: check_orthog											!
-    !	Arguments:														!
-    !		mtx_1 - Orthogonal transformation Matrix					!
-    !		mtx_2 - Overlap Matrix										!
-	!		method - tells function which orthogonalisation method		!
-	!				 to check											!
-	!					S ====> Symmetric Lowdin						!
-	!					G ====> Gram-Schmidt							!
-    !	Method:															!
-    !		Performs the orthogonality check detialed in the report		!
-	!		for each of the methods used								!
-    !####################################################################
 	FUNCTION check_orthog(mtx_1, mtx_2, method)
 		CHARACTER (len=1) :: method
 		DOUBLE PRECISION :: mtx_1(:,:), mtx_2(:,:)
