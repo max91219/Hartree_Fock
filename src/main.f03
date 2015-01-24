@@ -70,16 +70,6 @@ END DO
 ! make initial guess at C
 C = 1.0D0/DSQRT(DBLE(N))
 
-! calculate the density matrix
-D = 0.0D0
-DO i=1,N_el
-	DO j=1,N
-		DO k=1,N
-			D(j,k) = D(j,k) + (C(i) * C(j))
-		END DO
-	END DO
-END DO
-
 ! calculate matrix to orthogonalise S and F
 m_sl = ovlp
 CALL sym_lowdin(m_sl)
