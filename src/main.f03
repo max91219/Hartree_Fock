@@ -10,14 +10,11 @@ IMPLICIT NONE
 CHARACTER (len=300) :: file_name = '' 
 CHARACTER (len=100) :: out_file
 TYPE(atom), ALLOCATABLE :: atoms(:)
-DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), m_sl(:,:), C(:), D(:,:)
+DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), s_half(:,:), C(:,:), D(:,:)
 DOUBLE PRECISION, ALLOCATABLE :: ke(:,:), nuc(:,:), H(:,:), F(:,:)
-DOUBLE PRECISION, AllOCATABLE :: J_mat(:,:,:,:), K_mat(:,:,:,:)
+DOUBLE PRECISION, AllOCATABLE :: J_mat(:,:,:,:)
 INTEGER :: N = 0, i = 0, j = 0, k=0, l=0, m=0, N_el = 0
 DOUBLE PRECISION :: thresh =0.0D0
-DOUBLE PRECISION :: lst_E, curr_E
-DOUBLE PRECISION, ALLOCATABLE :: eig_val(:), eig_vec(:,:)
-
 
 CALL GET_COMMAND_ARGUMENT(1, file_name)
 
@@ -35,8 +32,8 @@ CALL read_input_file(TRIM(file_name), atoms, thresh)
 N = SIZE(atoms) 
 N_el = 2
 
-ALLOCATE(ovlp(N,N), m_sl(N,N), ke(N,N), nuc(N,N), H(N,N), F(N,N), C(N))
-ALLOCATE(J_mat(N,N,N,N), K_mat(N,N,N,N), D(N,N), eig_val(N), eig_vec(N,N))
+ALLOCATE(ovlp(N,N), ke(N,N), nuc(N,N), H(N,N), F(N,N), C(N,N))
+ALLOCATE(J_mat(N,N,N,N), D(N,N))
 
 ! Caclulate the matracies S and H
 DO i=1,N
@@ -54,13 +51,15 @@ END DO
 
 H = ke + nuc
 
+CALL write_arr_console(ovlp)
+WRITE (*,*) (NEW_LINE('A'), i=1,4)
+
 ! calculate J and K integrals
 DO i=1,N
 	DO j=1,N
 		DO k=1,N
 			DO l=1,N
 				J_mat(i,j,k,l) = atoms(i)%J_int(atoms(j), atoms(k), atoms(l))
-				K_mat(i,j,k,l) = atoms(i)%K_int(atoms(j), atoms(l), atoms(j))
 			END DO
 		END DO
 	END DO
@@ -70,23 +69,35 @@ END DO
 ! make initial guess at C
 C = 1.0D0/DSQRT(DBLE(N))
 
-! calculate matrix to orthogonalise S and F
-m_sl = ovlp
-CALL sym_lowdin(m_sl)
+!normalise c with respect to S
+C = C / MATMUL( MATMUL(C, ovlp), TRANSPOSE(C))
 
-! reduce J and K integrals into Fock matrix
-DO i=1,N
-	DO j=1,N
-		DO k=1,(N_el/2)
-			DO l=1,N
-				DO m=1,N
-					F(i,j) = H(i,j) + C(l) * C(m) * (2.0D0 * J_mat(i,j,l,m) - K_mat(i,m,l,j))
-				END DO
-			END DO			
+!calculate the density matrix
+DO i=1, N_el/2
+	DO j=1, N
+		DO k=1, N		
+			D(j,k) = 2.0D0 * C(j,i) * C(k,i)
 		END DO
 	END DO
 END DO
 
+! Calc the Fock Matrix
+F = 0.0D0
+DO i=1, N
+	DO j=1, N
+		DO k=1, N
+			DO l=1, N
+				F(i,j) = F(i,j) + D(k,l) * (J_mat(i, k, j, l) + 0.5D0 * J_mat(i, k, l, j))
+			END DO
+		END DO
+	END DO
+END DO
 
+F = F + H
+
+CALL write_arr_console(F)
+WRITE (*,*) (NEW_LINE('A'), i=1,4)
+
+!Start SFC interations
 
 END PROGRAM main
