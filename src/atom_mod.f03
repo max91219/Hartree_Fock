@@ -27,7 +27,7 @@ MODULE atom_mod
 			DOUBLE PRECISION :: diff(3)
 			
 			pre_fac = (PI/(this%alpha + atm_2%alpha))**(3.0D0/2.0D0)
-			norm = (PI/ (this$alpha + this%alpha))**(-3.0D0/4.0D0)
+			norm = (PI/ (this%alpha + this%alpha))**(-3.0D0/4.0D0)
 
 			exp_fac = ((-1.0D0 * this%alpha * atm_2%alpha) / &
 						(this%alpha + atm_2%alpha))
