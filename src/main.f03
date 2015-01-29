@@ -14,7 +14,7 @@ DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), s_half(:,:), C(:,:), D(:,:)
 DOUBLE PRECISION, ALLOCATABLE :: ke(:,:), nuc(:,:), H(:,:), F(:,:)
 DOUBLE PRECISION, AllOCATABLE :: J_mat(:,:,:,:)
 INTEGER :: N = 0, i = 0, j = 0, k=0, l=0, m=0, N_el = 0
-DOUBLE PRECISION :: thresh =0.0D0
+DOUBLE PRECISION :: thresh =0.0D0, energy = 0.0D0, charge
 
 CALL GET_COMMAND_ARGUMENT(1, file_name)
 
@@ -30,7 +30,8 @@ END IF
 CALL read_input_file(TRIM(file_name), atoms, thresh)
 
 N = SIZE(atoms) 
-N_el = 2
+N_el = 2 
+charge = 2.0D0
 
 ALLOCATE(ovlp(N,N), ke(N,N), nuc(N,N), H(N,N), F(N,N), C(N,N))
 ALLOCATE(J_mat(N,N,N,N), D(N,N))
@@ -38,23 +39,23 @@ ALLOCATE(J_mat(N,N,N,N), D(N,N))
 ! Caclulate the matracies S and H
 DO i=1,N
 	DO j=i,N
-		ovlp(j,i) = atoms(i)%overlap(atoms(j), thresh)
-		ovlp(i,j) = ovlp(j,i)
+		ovlp(i,j) = atoms(i)%overlap(atoms(j), thresh)
+		ovlp(j,i) = ovlp(i,j)
 
-		ke(j,i) = atoms(i)%ke_int(atoms(j))
-		ke(i,j) = ke(j,i)
+		ke(i,j) = atoms(i)%ke_int(atoms(j))
+		ke(j,i) = ke(i,j)
 
-		nuc(j,i) = atoms(i)%nuc_int(atoms(j))
-		nuc(i,j) = nuc(j,i)
+		nuc(i,j) = atoms(i)%nuc_int(atoms(j), charge)
+		nuc(j,i) = nuc(i,j)
 	END DO
 END DO
 
 H = ke + nuc
 
-CALL write_arr_console(ovlp)
-WRITE (*,*) (NEW_LINE('A'), i=1,4)
+!CAll write_arr_console(H)
+!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
 
-! calculate J and K integrals
+! calculate J
 DO i=1,N
 	DO j=1,N
 		DO k=1,N
@@ -65,39 +66,21 @@ DO i=1,N
 	END DO
 END DO
 
-
 ! make initial guess at C
-C = 1.0D0/DSQRT(DBLE(N))
-
-!normalise c with respect to S
-C = C / MATMUL( MATMUL(C, ovlp), TRANSPOSE(C))
+C = 1.0D0 
 
 !calculate the density matrix
-DO i=1, N_el/2
-	DO j=1, N
-		DO k=1, N		
-			D(j,k) = 2.0D0 * C(j,i) * C(k,i)
-		END DO
-	END DO
-END DO
+CALL dense_mat(D, C, N_el)
+!CAll write_arr_console(D)
+!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
 
 ! Calc the Fock Matrix
-F = 0.0D0
-DO i=1, N
-	DO j=1, N
-		DO k=1, N
-			DO l=1, N
-				F(i,j) = F(i,j) + D(k,l) * (J_mat(i, k, j, l) + 0.5D0 * J_mat(i, k, l, j))
-			END DO
-		END DO
-	END DO
-END DO
+CALL fock_mat(F, D, J_mat, H)
+!CAll write_arr_console(F)
+!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
 
-F = F + H
-
-CALL write_arr_console(F)
-WRITE (*,*) (NEW_LINE('A'), i=1,4)
 
 !Start SFC interations
+CALL scf_iter(F, ovlp, C, D, J_mat, H, N_el) 
 
 END PROGRAM main

@@ -1,5 +1,7 @@
 MODULE num_alg
 
+USE utils
+
 IMPLICIT NONE
 
 CONTAINS
@@ -119,96 +121,113 @@ CONTAINS
 
 	END SUBROUTINE trans_fock
 
-	SUBROUTINE sfc_iter(F_mat, S_mat, C_mat, D_mat, J_mat, H_mat, N_el)
+	SUBROUTINE dense_mat(D, C, N_el)
+		DOUBLE PRECISION C(:,:), D(:,:)
+		INTEGER :: N_el, i, j, k, N 
+
+		N = SIZE(C,1)
+		D = 0.0D0
+
+		DO i=1, (N_el/2)
+			DO j=1,N
+				DO k=1,N
+					D(j,k) = 2.0D0 * C(j,i) * C(k,i)
+				END DO
+			END DO
+		END DO
+
+	END SUBROUTINE dense_mat
+
+	SUBROUTINE fock_mat(F, D, J_mat, H)
+		DOUBLE PRECISION :: F(:,:), D(:,:), J_mat(:,:,:,:), H(:,:)
+		INTEGER :: i, j, k, l, N
+
+		N = SIZE(D,1)
+		F = 0.0D0
+
+		DO i=1,N
+			DO j=1,N
+				DO k=1,N
+					DO l=1,N
+						F(i,j) = F(i,j) + D(l,k) * (J_mat(i,k,j,l) - 0.5D0 * J_mat(i,l,k,j))
+					END DO
+				END DO
+			END DO
+		END DO
+
+		!CALL write_arr_console(F)
+		!WRITE (*,*) (NEW_LINE('A'), i=1,4)
+
+		F = H + F
+
+	END SUBROUTINE fock_mat
+
+	SUBROUTINE scf_iter(F_mat, S_mat, C_mat, D_mat, J_mat, H_mat, N_el)
 		DOUBLE PRECISION :: F_mat(:,:), S_mat(:,:), C_mat(:,:)
 		DOUBLE PRECISION :: D_mat(:,:), J_mat (:,:,:,:), H_mat(:,:)
-		DOUBLE PRECISION :: last_e = 1.0D10, current_e = 0.0D0
-		DOUBLE PRECISION, ALLOCATABLE :: e_vals(:), C_new(:,:), WORK(:), S_work(:,:)
-		INTEGER :: INFO = 0, LWORK = -1, i, j, k, l, N, N_el
-		
-		N = SIZE(F_mat, 1)
+		DOUBLE PRECISION , ALLOCATABLE :: W(:), WORK(:), S_work(:,:)
+		DOUBLE PRECISION :: curr_e, last_e
+		INTEGER :: N_el, N, LWORK , INFO = 0, i, j
 
-		ALLOCATE(e_vals(N), C_new(SIZE(C_mat, 1), SIZE(C_mat, 2)), WORK(1), S_work(N,N))
-		C_new = F_mat
+		N = SIZE(F_mat,1)
+		curr_e = 1.0D0
+		last_e = 0.0D0
+		C_mat = F_mat
+
+		! set up LAPACK workspace
+		ALLOCATE(W(N), WORK(1), S_work(N,N))
+		LWORK = -1
 		S_work = S_mat
 
-		! set up the LAPACK environment
-		CALL DSYGV(1, 'V', 'L', SIZE(C_new, 1), C_new, SIZE(C_new, 1), S_work,&
-			 	SIZE(S_work, 1), e_vals, WORK, LWORK, INFO)
+		CALL DSYGV(1, 'V', 'U', SIZE(C_mat,1), C_mat, SIZE(C_mat,1),&
+				 S_work, SIZE(S_work,1), W, WORK, LWORK, INFO)
 		CALL check_lapack(INFO)
 
 		LWORK = WORK(1)
 		DEALLOCATE(WORK)
 		ALLOCATE(WORK(LWORK))
-		
-		! start the convergence loop
-		DO WHILE ( (last_e - current_e) .gt. 0.0D-5)
-			
-			!set the energies
-			last_e = current_e
 
-			!set up work matracies
+		DO WHILE (ABS(curr_e - last_e) .gt. 0.1D-15)
+			C_mat = F_mat
 			S_work = S_mat
+			last_e = curr_e
 
-			!Call lapack to get new values of c
-			CALL DSYGV(1, 'V', 'L', SIZE(C_new, 1), C_new, SIZE(C_new, 1), S_work,&
-				 	SIZE(S_work, 1), e_vals, WORK, LWORK, INFO)
-			CALL check_lapack(INFO)
-
-			! Recalculate the density matrix
-			DO i=1, N_el/2
-				DO j=1, N
-					DO k=1, N
-						D_mat(j,k) = 2.0D0 * C_new(j,i) * C_new(k,i)
-       				END DO
-			   	END DO
-			END DO
+			! Caculate new C
+			CALL DSYGV(1, 'V', 'U', SIZE(C_mat,1), C_mat, SIZE(C_mat,1),&
+					 S_work, SIZE(S_work,1), W, WORK, LWORK, INFO)
+			CALL check_lapack(INFO)		
 			
-			! Recalculate the fock Matrix
-			DO i=1, N
-				DO j=1, N
-					DO k=1, N
-						DO l=1, N
-							C_new(i,j) = C_new(i,j) + D_mat(k,l) * (J_mat(i, k, j, l) + 0.5D0 * J_mat(i, k, l, j))
-						END DO
-					END DO
-				END DO
-			END DO
-			C_new = C_new + H_mat
-			
-			! calculate the new energy
-			current_e = hf_e(H_mat, D_mat, J_mat)
-		END DO
-		
-		F_mat = C_new
-	
-	END SUBROUTINE sfc_iter
+			! calculate new Density Matrix
+			CALL dense_mat(D_mat, C_mat, N_el)
 
-	FUNCTION hf_E(H_mat, D_mat, J_mat)
+			! calculate new Fock matrix
+			CALL fock_mat(F_mat, D_mat, J_mat, H_mat)
+
+			! calculate new energy
+			curr_e = hf_E(H_mat, D_mat, F_mat)
+			WRITE(*,*) 'The current energy is: ', curr_e
+
+		END DO	
+
+		WRITE (*,*) 'The final energy is: ', curr_e
+
+	END SUBROUTINE scf_iter
+
+	FUNCTION hf_E(H_mat, D_mat, F_mat)
 		DOUBLE PRECISION :: hf_E
-		DOUBLE PRECISION :: H_mat(:,:), D_mat(:,:), J_mat(:,:,:,:)
-		INTEGER :: i, j, k, l, N
+		DOUBLE PRECISION :: H_mat(:,:), D_mat(:,:), F_mat(:,:)
+		INTEGER :: i, j, N
 
-		hf_e = 0.0D0
-		N = SIZE(D_mat, 1)
-		
-		DO i = 1, N
-			DO j = 1, N
-				DO k = 1, N
-					DO l = 1, N
-						hf_e = hf_e + D_mat(i,k) * D_mat(j,l) * (J_mat(i,j,k,l) - 0.05D0 * J_mat(i,j,l,k))
-					END DO
-				END DO
+		N = SIZE(F_mat,1)
+		hf_E = 0.0D0
+
+		DO i=1,N
+			DO j=1,N
+				hf_E = hf_E + D_mat(j,i) * (H_mat(i,j) + F_mat(i,j))
 			END DO
 		END DO
-		
-		hf_e = 0.5D0 * hf_e
 
-		DO i = 1, N
-			DO j = 1, N
-				hf_e = hf_e + D_mat(i,j) * H_mat(i,j)
-			END DO
-		END DO
+		hf_E = hf_e * 0.5D0
 
 	END FUNCTION hf_E
 

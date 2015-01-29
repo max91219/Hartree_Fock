@@ -1,15 +1,14 @@
 # Number of atoms in the system
 NUMBER_OF_ATOMS
-4
+3
 # Threshold value for the overlap matrix
 CUTOFF
 1.0D-8
 # Atom type followed by postions (x,y,z) followed by the alpha exponent for the guassian
 ATOM_POSITIONS
-H 0.0 0.0 0.0 0.297104 
-H 0.0 0.0 0.0 1.236745
-H 0.0 0.0 0.0 5.749982
-H 0.0 0.0 0.0 38.21668
+H 0.0 0.0 0.0 6.36242139
+H 0.0 0.0 0.0 1.15892300
+H 0.0 0.0 0.0 0.31364979
  
  
  
