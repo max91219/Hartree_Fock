@@ -1,6 +1,6 @@
 #Compiler and compiler options
 FC = gfortran
-FCFLAGS = -fbounds-check -O0 -I $(MOD_DIR) 
+FCFLAGS = -fbounds-check -O2 -I $(MOD_DIR) 
 LDFLAGS = -llapack 
 
 #Definitions of directorys
