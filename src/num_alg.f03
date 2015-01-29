@@ -1,5 +1,7 @@
 MODULE num_alg
 
+USE utils
+
 IMPLICIT NONE
 
 CONTAINS
@@ -91,5 +93,142 @@ CONTAINS
 			CALL EXIT(1)
 		END IF
 	END FUNCTION
+
+	SUBROUTINE trans_fock(fock, s_half, s_half_inv, C)
+		DOUBLE PRECISION :: fock(:,:), s_half(:,:), s_half_inv(:,:), C(:)
+		INTEGER :: INFO = 0, LWORK = -1
+		INTEGER, ALLOCATABLE :: IPIV(:), WORK(:)
+
+		ALLOCATE (IPIV(SIZE(s_half, 1)), WORK(1))
+
+		CALL DGETRF(SIZE(s_half_inv,2), SIZE(s_half_inv,1), s_half_inv,&
+				SIZE(s_half_inv,1), IPIV, INFO)
+		CALL check_lapack(INFO)
+
+		CALL DGETRI(SIZE(s_half_inv, 1), s_half_inv, SIZE(s_half_inv, 1),&
+				IPIV, WORK, LWORK, INFO)
+		CALL check_lapack(INFO)
+
+		LWORK = WORK(1)
+		DEALLOCATE(WORK)
+		ALLOCATE (WORK(LWORK))
+
+		CALL DGETRI(SIZE(s_half_inv,1), s_half_inv, SIZE(s_half_inv, 1),&
+				IPIV, WORK, LWORK, INFO)
+
+		fock = MATMUL(MATMUL(s_half, fock), s_half)
+		C = MATMUL(s_half_inv, C)
+
+	END SUBROUTINE trans_fock
+
+	SUBROUTINE dense_mat(D, C, N_el)
+		DOUBLE PRECISION C(:,:), D(:,:)
+		INTEGER :: N_el, i, j, k, N 
+
+		N = SIZE(C,1)
+		D = 0.0D0
+
+		DO i=1, (N_el/2)
+			DO j=1,N
+				DO k=1,N
+					D(j,k) = 2.0D0 * C(j,i) * C(k,i)
+				END DO
+			END DO
+		END DO
+
+	END SUBROUTINE dense_mat
+
+	SUBROUTINE fock_mat(F, D, J_mat, H)
+		DOUBLE PRECISION :: F(:,:), D(:,:), J_mat(:,:,:,:), H(:,:)
+		INTEGER :: i, j, k, l, N
+
+		N = SIZE(D,1)
+		F = 0.0D0
+
+		DO i=1,N
+			DO j=1,N
+				DO k=1,N
+					DO l=1,N
+						F(i,j) = F(i,j) + D(l,k) * (J_mat(i,k,j,l) - 0.5D0 * J_mat(i,l,k,j))
+					END DO
+				END DO
+			END DO
+		END DO
+
+		!CALL write_arr_console(F)
+		!WRITE (*,*) (NEW_LINE('A'), i=1,4)
+
+		F = H + F
+
+	END SUBROUTINE fock_mat
+
+	SUBROUTINE scf_iter(F_mat, S_mat, C_mat, D_mat, J_mat, H_mat, N_el)
+		DOUBLE PRECISION :: F_mat(:,:), S_mat(:,:), C_mat(:,:)
+		DOUBLE PRECISION :: D_mat(:,:), J_mat (:,:,:,:), H_mat(:,:)
+		DOUBLE PRECISION , ALLOCATABLE :: W(:), WORK(:), S_work(:,:)
+		DOUBLE PRECISION :: curr_e, last_e
+		INTEGER :: N_el, N, LWORK , INFO = 0, i, j
+
+		N = SIZE(F_mat,1)
+		curr_e = 1.0D0
+		last_e = 0.0D0
+		C_mat = F_mat
+
+		! set up LAPACK workspace
+		ALLOCATE(W(N), WORK(1), S_work(N,N))
+		LWORK = -1
+		S_work = S_mat
+
+		CALL DSYGV(1, 'V', 'U', SIZE(C_mat,1), C_mat, SIZE(C_mat,1),&
+				 S_work, SIZE(S_work,1), W, WORK, LWORK, INFO)
+		CALL check_lapack(INFO)
+
+		LWORK = WORK(1)
+		DEALLOCATE(WORK)
+		ALLOCATE(WORK(LWORK))
+
+		DO WHILE (ABS(curr_e - last_e) .gt. 0.1D-15)
+			C_mat = F_mat
+			S_work = S_mat
+			last_e = curr_e
+
+			! Caculate new C
+			CALL DSYGV(1, 'V', 'U', SIZE(C_mat,1), C_mat, SIZE(C_mat,1),&
+					 S_work, SIZE(S_work,1), W, WORK, LWORK, INFO)
+			CALL check_lapack(INFO)		
+			
+			! calculate new Density Matrix
+			CALL dense_mat(D_mat, C_mat, N_el)
+
+			! calculate new Fock matrix
+			CALL fock_mat(F_mat, D_mat, J_mat, H_mat)
+
+			! calculate new energy
+			curr_e = hf_E(H_mat, D_mat, F_mat)
+			WRITE(*,*) 'The current energy is: ', curr_e
+
+		END DO	
+
+		WRITE (*,*) 'The final energy is: ', curr_e
+
+	END SUBROUTINE scf_iter
+
+	FUNCTION hf_E(H_mat, D_mat, F_mat)
+		DOUBLE PRECISION :: hf_E
+		DOUBLE PRECISION :: H_mat(:,:), D_mat(:,:), F_mat(:,:)
+		INTEGER :: i, j, N
+
+		N = SIZE(F_mat,1)
+		hf_E = 0.0D0
+
+		DO i=1,N
+			DO j=1,N
+				hf_E = hf_E + D_mat(j,i) * (H_mat(i,j) + F_mat(i,j))
+			END DO
+		END DO
+
+		hf_E = hf_e * 0.5D0
+
+	END FUNCTION hf_E
 
 END MODULE num_alg
