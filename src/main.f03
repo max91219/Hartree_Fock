@@ -10,10 +10,10 @@ IMPLICIT NONE
 CHARACTER (len=300) :: file_name = '' 
 CHARACTER (len=100) :: out_file
 TYPE(atom), ALLOCATABLE :: atoms(:)
-DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), s_half(:,:), C(:,:), D(:,:)
-DOUBLE PRECISION, ALLOCATABLE :: ke(:,:), nuc(:,:), H(:,:), F(:,:)
-DOUBLE PRECISION, AllOCATABLE :: J_mat(:,:,:,:)
-INTEGER :: N = 0, i = 0, j = 0, k=0, l=0, m=0, N_el = 0
+DOUBLE PRECISION, ALLOCATABLE :: ovlp(:,:), s_half(:,:), C_up(:,:), C_dwn(:,:), D_up(:,:)
+DOUBLE PRECISION, ALLOCATABLE :: ke(:,:), nuc(:,:), H(:,:), F_up(:,:), F_dwn(:,:), D_dwn(:,:)
+DOUBLE PRECISION, AllOCATABLE :: J_mat(:,:,:,:), D_tot(:,:)
+INTEGER :: N = 0, i = 0, j = 0, k=0, l=0, m=0, N_el = 0, N_up = 0, N_dwn = 0
 DOUBLE PRECISION :: thresh =0.0D0, energy = 0.0D0, charge
 
 CALL GET_COMMAND_ARGUMENT(1, file_name)
@@ -30,11 +30,19 @@ END IF
 CALL read_input_file(TRIM(file_name), atoms, thresh)
 
 N = SIZE(atoms) 
-N_el = 2 
-charge = 2.0D0
+N_el = 2
+charge = DBLE(N_el)
 
-ALLOCATE(ovlp(N,N), ke(N,N), nuc(N,N), H(N,N), F(N,N), C(N,N))
-ALLOCATE(J_mat(N,N,N,N), D(N,N))
+IF ( MOD(N_el,2) .eq. 0) THEN
+	N_up = MAX((charge/2),1.0)
+	N_dwn = N_el - N_up
+ELSE
+	N_dwn = MAX((charge/2),1.0)
+	N_up = N_el - N_up
+END IF
+
+ALLOCATE(ovlp(N,N), ke(N,N), nuc(N,N), H(N,N), F_up(N,N), F_dwn(N,N), C_up(N,N), C_dwn(N,N))
+ALLOCATE(J_mat(N,N,N,N), D_up(N,N), D_dwn(N,N))
 
 ! Caclulate the matracies S and H
 DO i=1,N
@@ -52,9 +60,6 @@ END DO
 
 H = ke + nuc
 
-!CAll write_arr_console(H)
-!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
-
 ! calculate J
 DO i=1,N
 	DO j=1,N
@@ -67,20 +72,19 @@ DO i=1,N
 END DO
 
 ! make initial guess at C
-C = 1.0D0 
+C_up = 1.0D0 
+C_dwn = 1.0D0
 
 !calculate the density matrix
-CALL dense_mat(D, C, N_el)
-!CAll write_arr_console(D)
-!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
+CALL dense_mat(D_up, C_up, N_up)
+CALL dense_mat(D_dwn, C_dwn, N_dwn)
+D_tot = D_up + D_dwn
 
 ! Calc the Fock Matrix
-CALL fock_mat(F, D, J_mat, H)
-!CAll write_arr_console(F)
-!WRITE(*,*) (NEW_LINE('A'), i=1, 4)
-
+CALL fock_mat(F_up, D_tot, D_up, J_mat, H)
+CALL fock_mat(F_dwn, D_tot, D_dwn, J_mat, H)
 
 !Start SFC interations
-CALL scf_iter(F, ovlp, C, D, J_mat, H, N_el) 
+CALL scf_iter(F_up, F_dwn, ovlp, C_up, C_dwn, D_tot, D_up, D_dwn, J_mat, H, N_up, N_dwn) 
 
 END PROGRAM main
